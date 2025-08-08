@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const app = express();
-const port = 3000;
+const PORT = process.env.PORT || 3000; // Cambiamos la forma de utilizar el puerto
 
 app.use(express.static('public')); // Carpeta para archivos estáticos
 
@@ -17,6 +17,6 @@ app.get('/extraer', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Servidor escuchando en http://localhost:${port}`);
-}); 
+app.listen(PORT, () => { // Cambiado a usar PORT
+    console.log(`Servidor escuchando en el puerto ${PORT}`);
+});
