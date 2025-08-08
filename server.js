@@ -1,12 +1,14 @@
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const cors = require('cors'); // Importar cors
+const cors = require('cors'); // Importar CORS
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors()); // Habilitar CORS para todas las rutas
+// Habilitar CORS para el dominio específico de GitHub Pages
+app.use(cors({ origin: 'https://maciasvt.github.io' })); // Asegúrate de que esta URL esté correcta
+
 app.use(express.static('public')); // Carpeta para archivos estáticos
 
 app.get('/extraer', async (req, res) => {
@@ -14,7 +16,7 @@ app.get('/extraer', async (req, res) => {
     try {
         const response = await axios.get(url);
         const html = response.data;
-        res.send(html); // O puedes enviar respuesta coherente como arriba
+        res.send(html); // O devolver datos en un formato procesado
     } catch (error) {
         res.status(500).send('Error al extraer la página: ' + error.message);
     }
