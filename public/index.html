@@ -1,4 +1,13 @@
-<style>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Letterboxd Compare</title>
+    <style>
     * {
         box-sizing: border-box;
     }
@@ -32,4 +41,323 @@
 
     input {
         font-size: 1.2rem;
-        padd
+        padding: 10px;
+        flex: 1 1 200px; /* Crece y se adapta */
+        min-width: 150px;
+    }
+
+    button {
+        font-size: 1.5rem;
+        background-color: #00ac1c;
+        color: white;
+        transition: background-color 0.3s, transform 0.2s;
+        border: none;
+        border-radius: 5px;
+        padding: 10px 20px;
+        margin-bottom: 20px;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #007a0b;
+        transform: translateY(-3px);
+    }
+
+    .film-container {
+        display: flex;
+        flex-wrap: wrap; /* Permite que se acomoden en móvil */
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        max-width: 1200px;
+        margin-bottom: 20px;
+    }
+
+    .label {
+        text-align: center;
+        flex: 1 1 100%;
+    }
+
+    #filmSlugs1, #filmSlugs2,
+    #filmCompare, #watchlistSlugs1,
+    #watchlistSlugs2, #watchlistCompare,
+    #uniqueFilms1, #uniqueFilms2,
+    #filmSlugs3, #filmSlugs4 {
+        border: 1px solid #ccc;
+        padding: 10px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        flex: 1 1 300px; /* Cada columna ocupa mínimo 300px */
+        max-height: 200px;
+        background-color: white;
+        color: black;
+        font-size: 1rem;
+        display: none;
+    }
+
+    /* Ajustes para pantallas pequeñas */
+    @media (max-width: 768px) {
+        h1 {
+            font-size: 2rem;
+        }
+        button {
+            font-size: 1.2rem;
+            padding: 8px 15px;
+        }
+        input {
+            font-size: 1rem;
+        }
+        #filmSlugs1, #filmSlugs2, #filmCompare,
+        #watchlistSlugs1, #watchlistSlugs2,
+        #watchlistCompare, #filmSlugs3, #filmSlugs4 {
+            max-height: 150px;
+            font-size: 0.9rem;
+        }
+    }
+</style>
+
+    <script>
+        let username1 = '';
+        let username2 = '';
+        function construirUrlYExtraer() {
+            username1 = document.getElementById('username1').value;
+            username2 = document.getElementById('username2').value;
+
+            // Actualizar los encabezados con los nombres de usuario
+            document.getElementById('labelSlugs1').textContent = `Last seen by : ${username1}`;
+            document.getElementById('labelSlugs2').textContent = `Last seen by : ${username2}`;
+            document.getElementById('labelWatchlistSlugs1').textContent = `${username1}'s Watchlist`;
+            document.getElementById('labelWatchlistSlugs2').textContent = `${username2}'s Watchlist`;
+
+            const url1 = `https://letterboxd.com/${username1}/films`;
+            const url2 = `https://letterboxd.com/${username2}/films`;
+            const watchlistUrl1 = `https://letterboxd.com/${username1}/watchlist/`;
+            const watchlistUrl2 = `https://letterboxd.com/${username2}/watchlist/`;
+
+            // Extraer ambos sets de datos en paralelo
+            Promise.all([
+                extraerHtml(url1, 'filmSlugs1').then(() => {
+                    document.getElementById('labelSlugs1').style.display = 'block'; // Mostrar label de usuario 1
+                }),
+                extraerHtml(url2, 'filmSlugs2').then(() => {
+                    document.getElementById('labelSlugs2').style.display = 'block'; // Mostrar label de usuario 2
+                }),
+                extraerHtmlWatchlist(watchlistUrl1, 'watchlistSlugs1').then(() => {
+                    document.getElementById('labelWatchlistSlugs1').style.display = 'block'; // Mostrar label de watchlist 1
+                }),
+                extraerHtmlWatchlist(watchlistUrl2, 'watchlistSlugs2').then(() => {
+                    document.getElementById('labelWatchlistSlugs2').style.display = 'block'; // Mostrar label de watchlist 2
+                })
+            ]).then(() => {
+                compararFilms();
+                compararWatchlists();
+                compararFilmsUnicos(); // Nueva llamada
+            });
+        }
+
+        async function extraerHtml(url, slugsContainerId) {
+            const response = await fetch(`/extraer?url=${encodeURIComponent(url)}`);
+            const html = await response.text();
+            const totalPages = encontrarTotalPaginas(html);
+            let filmData = extraerSlugsConCalificacion(html);
+
+            if (totalPages > 1) {
+                for (let i = 2; i <= totalPages; i++) {
+                    const pageUrl = `${url}/page/${i}/`;
+                    const pageResponse = await fetch(`/extraer?url=${encodeURIComponent(pageUrl)}`);
+                    const pageHtml = await pageResponse.text();
+                    filmData = filmData.concat(extraerSlugsConCalificacion(pageHtml));
+                }
+            }
+            document.getElementById(slugsContainerId).textContent = filmData.map(film => formatFilmSlug(film.slug, film.rating)).join('\n');
+            document.getElementById(slugsContainerId).style.display = 'block'; // Mostrar después de la extracción
+        }
+
+        async function extraerHtmlWatchlist(url, slugsContainerId) {
+            const response = await fetch(`/extraer?url=${encodeURIComponent(url)}`);
+            const html = await response.text();
+            const totalPages = encontrarTotalPaginas(html);
+            let watchlistData = extraerSlugsWatchlist(html);
+
+            if (totalPages > 1) {
+                for (let i = 2; i <= totalPages; i++) {
+                    const pageUrl = `${url}/page/${i}/`;
+                    const pageResponse = await fetch(`/extraer?url=${encodeURIComponent(pageUrl)}`);
+                    const pageHtml = await pageResponse.text();
+                    watchlistData = watchlistData.concat(extraerSlugsWatchlist(pageHtml));
+                }
+            }
+            document.getElementById(slugsContainerId).textContent = watchlistData.map(film => formatSlug(film.slug)).join('\n');
+            document.getElementById(slugsContainerId).style.display = 'block'; // Mostrar después de la extracción
+        }
+
+        function encontrarTotalPaginas(html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const paginacion = tempDiv.querySelectorAll('.paginate-page');
+            const totalPageNumber = paginacion.length > 0 ? paginacion[paginacion.length - 1].textContent : "1";
+            return parseInt(totalPageNumber, 10);
+        }
+
+        function extraerSlugsConCalificacion(html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const elementos = tempDiv.querySelectorAll('[data-film-slug]');
+            let filmData = [];
+            elementos.forEach(elemento => {
+                const filmSlug = elemento.getAttribute('data-film-slug');
+                const ratingElement = elemento.closest('.poster-container').querySelector('.poster-viewingdata .rating');
+                const rating = ratingElement ? ratingElement.className.match(/ rated-(\d+)/) : null;
+                const filmRating = rating ? rating[1] : "N/A";
+                filmData.push({ slug: filmSlug, rating: filmRating });
+            });
+            return filmData;
+        }
+
+        function extraerSlugsWatchlist(html) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const elementos = tempDiv.querySelectorAll('[data-film-slug]');
+            let watchlistData = [];
+            elementos.forEach(elemento => {
+                const filmSlug = elemento.getAttribute('data-film-slug');
+                watchlistData.push({ slug: filmSlug });
+            });
+            return watchlistData;
+        }
+
+        function compararFilms() {
+            const films1 = document.getElementById('filmSlugs1').textContent.split('\n').map(line => {
+                const parts = line.split(' - ');
+                return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
+            }).filter(film => film.rating !== "N/A");
+
+            const films2 = document.getElementById('filmSlugs2').textContent.split('\n').map(line => {
+                const parts = line.split(' - ');
+                return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
+            }).filter(film => film.rating !== "N/A");
+
+            const coincidencias = films1.filter(film1 => films2.some(film2 => film2.slug === film1.slug))
+                .map(film1 => {
+                    const film2 = films2.find(f => f.slug === film1.slug);
+                    return { slug: film1.slug, rating1: parseInt(film1.rating), rating2: parseInt(film2.rating) }; // Guarda los ratings como números
+                });
+
+            // Ordena por la diferencia entre los ratings
+            coincidencias.sort((a, b) => (b.rating1 - b.rating2) - (a.rating1 - a.rating2));
+
+            const coincidenciasFormateadas = coincidencias.map(film => `${film.slug} - Ratings: ${film.rating1} | ${film.rating2}`);
+            console.log("Coincidencias encontradas:", coincidenciasFormateadas);
+            document.getElementById('filmCompare').textContent = coincidenciasFormateadas.length > 0 ? coincidenciasFormateadas.join('\n') : "No se encontraron coincidencias.";
+            document.getElementById('filmCompare').style.display = 'block'; // Mostrar después de la comparación
+            document.getElementById('labelFilmCompare').style.display = 'block'; // Mostrar label de coincidencias
+        }
+
+        function compararWatchlists() {
+            const watchlist1 = document.getElementById('watchlistSlugs1').textContent.split('\n').map(slug => slug.trim()).filter(slug => slug !== "");
+            const watchlist2 = document.getElementById('watchlistSlugs2').textContent.split('\n').map(slug => slug.trim()).filter(slug => slug !== "");
+
+            const coincidenciasWatchlist = watchlist1.filter(slug1 => watchlist2.includes(slug1));
+            console.log("Coincidencias en la watchlist encontradas:", coincidenciasWatchlist);
+            document.getElementById('watchlistCompare').textContent = coincidenciasWatchlist.length > 0 ? coincidenciasWatchlist.map(slug => formatSlug(slug)).join('\n') : "No se encontraron coincidencias en las watchlists.";
+            document.getElementById('watchlistCompare').style.display = 'block'; // Mostrar después de la comparación
+            document.getElementById('labelWatchlistCompare').style.display = 'block'; // Mostrar label de comparación de watchlist
+        }
+
+        function compararFilmsUnicos() {
+            const films1 = document.getElementById('filmSlugs1').textContent.split('\n').map(line => {
+                const parts = line.split(' - ');
+                return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
+            }).filter(film => film.rating !== "N/A");
+
+            const films2 = document.getElementById('filmSlugs2').textContent.split('\n').map(line => {
+                const parts = line.split(' - ');
+                return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
+            }).filter(film => film.rating !== "N/A");
+
+            const uniqueToUser1 = films1.filter(film1 => !films2.some(film2 => film2.slug === film1.slug));
+            const uniqueToUser2 = films2.filter(film2 => !films1.some(film1 => film1.slug === film2.slug));
+
+            // Función de inversión para el orden de clasificación
+            const ratingSort = (a, b) => {
+                if (a.rating === "N/A" && b.rating === "N/A") return 0; // Ambos son N/A
+                if (a.rating === "N/A") return 1; // Colocar N/A al final
+                if (b.rating === "N/A") return -1;
+                return b.rating - a.rating; // Ordenar de mayor a menor
+            };
+
+            // Ordenar por rating (más alto primero)
+            uniqueToUser1.sort(ratingSort);
+            uniqueToUser2.sort(ratingSort);
+
+            // Mostrar en los nuevos divs
+            document.getElementById('filmSlugs3').textContent = uniqueToUser1.length > 0 ? uniqueToUser1.map(film => `${film.slug} - Rating: ${film.rating}`).join('\n') : "No hay películas vistas por " + username1 + " que no haya visto " + username2 + ".";
+            document.getElementById('filmSlugs4').textContent = uniqueToUser2.length > 0 ? uniqueToUser2.map(film => `${film.slug} - Rating: ${film.rating}`).join('\n') : "No hay películas vistas por " + username2 + " que no haya visto " + username1 + ".";
+            
+            console.log(`Películas únicas para ${username1}:`, uniqueToUser1);
+            console.log(`Películas únicas para ${username2}:`, uniqueToUser2);
+
+            // Mostrar los nuevos divs
+            document.getElementById('filmSlugs3').style.display = 'block'; // Mostrar películas únicas de usuario 1
+            document.getElementById('filmSlugs4').style.display = 'block'; // Mostrar películas únicas de usuario 2
+
+            document.getElementById('labelUniqueFilms1').style.display = 'block'; // Mostrar etiqueta de películas únicas de usuario 1
+            document.getElementById('labelUniqueFilms2').style.display = 'block'; // Mostrar etiqueta de películas únicas de usuario 2
+            document.getElementById('labelUniqueFilms1').textContent = `Seen by ${username1} not by ${username2}`;
+            document.getElementById('labelUniqueFilms2').textContent = `Seen by ${username2} not by ${username1}`;
+        }
+
+        function formatFilmSlug(slug, rating) {
+            const formattedSlug = slug.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+            return `${formattedSlug} - Rating: ${rating}`;
+        }
+
+        // Nueva función para formatear slugs de watchlist
+        function formatSlug(slug) {
+            return slug.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+    </script>
+</head>
+<body>
+    <h1>Letterboxd Compare</h1>
+    <div class="container">
+        <input type="text" id="username1" placeholder="User 1" />
+        <input type="text" id="username2" placeholder="User 2" />
+    </div>
+    <button onclick="construirUrlYExtraer()">Compare profiles!</button>
+    
+    <!-- Labels escondidos inicialmente -->
+    <div class="film-container">
+        <h2 id="labelSlugs1" class="label">Last seen by :</h2>
+        <h2 id="labelSlugs2" class="label">Last seen by :</h2>
+    </div>
+    <div class="film-container">
+        <div id="filmSlugs1"></div>
+        <div id="filmSlugs2"></div>
+    </div>
+    
+    <!-- Etiqueta de Seen by both -->
+    <h2 id="labelFilmCompare" class="label">Seen by both + ratings:</h2>
+    <div id="filmCompare"></div>
+
+    <!-- Etiquetas y contenedores para películas únicas -->
+    <h2 id="labelUniqueFilms1" class="label">Vistos por ${username1} pero no por ${username2}:</h2>
+    <div id="filmSlugs3"></div>
+    <h2 id="labelUniqueFilms2" class="label">Vistos por ${username2} pero no por ${username1}:</h2>
+    <div id="filmSlugs4"></div>
+    
+    <div class="film-container">
+        <h2 id="labelWatchlistSlugs1" class="label">Watchlist:</h2>
+        <h2 id="labelWatchlistSlugs2" class="label">Watchlist:</h2>
+    </div>
+    <div class="film-container">
+        <div id="watchlistSlugs1"></div>
+        <div id="watchlistSlugs2"></div>
+    </div>
+    
+    <!-- Etiqueta de In both watchlists -->
+    <h2 id="labelWatchlistCompare" class="label">In both watchlists:</h2>
+    <div id="watchlistCompare"></div>
+    <pre id="codeOutput"></pre>
+</body>
+</html>
