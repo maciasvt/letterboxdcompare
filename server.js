@@ -18,6 +18,8 @@ app.get('/extraer', async (req, res) => {
     try {
         const response = await axios.get(url);
         const html = response.data;
+
+        res.setHeader('Access-Control-Allow-Origin', 'https://maciasvt.github.io'); // Agregar manualmente
         res.send(html);
     } catch (error) {
         res.status(500).send('Error al extraer la página: ' + error.message);
@@ -27,3 +29,4 @@ app.get('/extraer', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Servidor escuchando en el puerto ${PORT}`);
 });
+
