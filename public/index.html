@@ -97,6 +97,7 @@
             const response = await fetch(`https://letterboxdcompare.onrender.com/extraer?url=${encodeURIComponent(url)}`);
             const html = await response.text();
             const totalPages = encontrarTotalPaginas(html);
+            console.log(totalPages);
             let filmData = extraerSlugsConCalificacion(html);
 
             // Solo buscar más páginas si hay más de una
@@ -246,4 +247,5 @@
     <pre id="codeOutput"></pre>
 </body>
 </html>
+
 
