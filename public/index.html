@@ -105,7 +105,7 @@
                 for (let i = 2; i <= totalPages; i++) {
                     const pageUrl = `${url}/page/${i}/`;
                     console.log("url:",pageUrl);
-                    const pageResponse = await fetch(`/extraer?url=${encodeURIComponent(pageUrl)}`);
+                    const pageResponse = await fetch(`https://letterboxdcompare.onrender.com/extraer?url=${encodeURIComponent(pageUrl)}`);
                     const pageHtml = await pageResponse.text();
                     filmData = filmData.concat(extraerSlugsConCalificacion(pageHtml));
                 }
@@ -124,7 +124,7 @@
             if (totalPages > 1) {
                 for (let i = 2; i <= totalPages; i++) {
                     const pageUrl = `${url}/page/${i}/`;
-                    const pageResponse = await fetch(`/extraer?url=${encodeURIComponent(pageUrl)}`);
+                    const pageResponse = await fetch(`https://letterboxdcompare.onrender.com/extraer?url=${encodeURIComponent(pageUrl)}`);
                     const pageHtml = await pageResponse.text();
                     watchlistData = watchlistData.concat(extraerSlugsWatchlist(pageHtml));
                 }
@@ -248,6 +248,7 @@
     <pre id="codeOutput"></pre>
 </body>
 </html>
+
 
 
 
