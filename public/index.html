@@ -73,7 +73,6 @@
   .results {
     display:none;
     width:100%;
-    display:flex;
     flex-direction:column;
     gap:12px;
   }
@@ -293,27 +292,29 @@
     document.getElementById('labelWatchlistSlugs1').textContent = `${username1}'s Watchlist`;
     document.getElementById('labelWatchlistSlugs2').textContent = `${username2}'s Watchlist`;
 
-    // Seen (solo rating válido)
-    const seen1 = filmsUser1.filter(f => f.rating !== 'N/A');
-    const seen2 = filmsUser2.filter(f => f.rating !== 'N/A');
+    // Vistos para ambos usuarios (incluye N/A que sí cuentan como vistas)
+    const seenUser1 = filmsUser1; // NO filtramos N/A, cuentan como vistas
+    const seenUser2 = filmsUser2;
 
-    document.getElementById('filmSlugs1').textContent = seen1.length ? seen1.map(f => formatFilmSlug(f.slug, f.rating)).join('\n') : 'No visto identificado.';
-    document.getElementById('filmSlugs2').textContent = seen2.length ? seen2.map(f => formatFilmSlug(f.slug, f.rating)).join('\n') : 'No visto identificado.';
+    document.getElementById('filmSlugs1').textContent = seenUser1.length ? seenUser1.map(f => formatFilmSlug(f.slug, f.rating)).join('\n') : 'No hay películas vistas.';
+    document.getElementById('filmSlugs2').textContent = seenUser2.length ? seenUser2.map(f => formatFilmSlug(f.slug, f.rating)).join('\n') : 'No hay películas vistas.';
 
     // Watchlists
     document.getElementById('watchlistSlugs1').textContent = watchlistUser1.length ? watchlistUser1.map(s => formatSlug(s.slug)).join('\n') : 'Watchlist vacía.';
     document.getElementById('watchlistSlugs2').textContent = watchlistUser2.length ? watchlistUser2.map(s => formatSlug(s.slug)).join('\n') : 'Watchlist vacía.';
 
-    // Seen by both: solo con rating en ambos
-    const seenByBoth = seen1.filter(s1 => seen2.some(s2 => s2.slug === s1.slug))
+    // Seen by both con rating válido (sin N/A)
+    const ratedUser1 = seenUser1.filter(f => f.rating !== 'N/A');
+    const ratedUser2 = seenUser2.filter(f => f.rating !== 'N/A');
+
+    const seenByBothRated = ratedUser1.filter(s1 => ratedUser2.some(s2 => s2.slug === s1.slug))
       .map(s1 => {
-        const s2 = seen2.find(x => x.slug === s1.slug);
+        const s2 = ratedUser2.find(s => s.slug === s1.slug);
         return { slug: s1.slug, rating1: parseInt(s1.rating,10), rating2: parseInt(s2.rating,10) };
       });
+    seenByBothRated.sort((a,b) => Math.abs(b.rating1 - b.rating2) - Math.abs(a.rating1 - a.rating2));
 
-    seenByBoth.sort((a,b) => Math.abs(b.rating1 - b.rating2) - Math.abs(a.rating1 - a.rating2));
-
-    document.getElementById('filmCompare').textContent = seenByBoth.length ? seenByBoth.map(f => `${formatSlug(f.slug)} - Ratings: ${f.rating1} | ${f.rating2}`).join('\n') : 'No se encontraron coincidencias.';
+    document.getElementById('filmCompare').textContent = seenByBothRated.length ? seenByBothRated.map(f => `${formatSlug(f.slug)} - Ratings: ${f.rating1} | ${f.rating2}`).join('\n') : 'No se encontraron coincidencias con rating.';
 
     // Watchlist matches
     const wl1 = watchlistUser1.map(x => x.slug);
@@ -321,19 +322,30 @@
     const wlMatches = wl1.filter(s => wl2.includes(s));
     document.getElementById('watchlistCompare').textContent = wlMatches.length ? wlMatches.map(formatSlug).join('\n') : 'No se encontraron coincidencias en las watchlists.';
 
-    // Únicos (vistos con rating válido)
-    const uniqueToUser1 = seen1.filter(s1 => !seen2.some(s2 => s2.slug === s1.slug));
-    const uniqueToUser2 = seen2.filter(s2 => !seen1.some(s1 => s1.slug === s2.slug));
+    // Películas vistas solo por usuario 1 (con rating o N/A)
+    const uniqueToUser1 = seenUser1.filter(s1 => !seenUser2.some(s2 => s2.slug === s1.slug));
+    // Películas vistas solo por usuario 2
+    const uniqueToUser2 = seenUser2.filter(s2 => !seenUser1.some(s1 => s1.slug === s2.slug));
 
-    uniqueToUser1.sort((a,b) => parseInt(b.rating||0,10) - parseInt(a.rating||0,10));
-    uniqueToUser2.sort((a,b) => parseInt(b.rating||0,10) - parseInt(a.rating||0,10));
+    uniqueToUser1.sort((a,b) => {
+      if(a.rating === 'N/A' && b.rating === 'N/A') return 0;
+      if(a.rating === 'N/A') return 1;
+      if(b.rating === 'N/A') return -1;
+      return b.rating - a.rating;
+    });
+    uniqueToUser2.sort((a,b) => {
+      if(a.rating === 'N/A' && b.rating === 'N/A') return 0;
+      if(a.rating === 'N/A') return 1;
+      if(b.rating === 'N/A') return -1;
+      return b.rating - a.rating;
+    });
 
     document.getElementById('filmSlugs3').textContent = uniqueToUser1.length ? uniqueToUser1.map(f => `${formatSlug(f.slug)} - Rating: ${f.rating}`).join('\n') : `No hay películas vistas por ${username1} que no haya visto ${username2}.`;
     document.getElementById('filmSlugs4').textContent = uniqueToUser2.length ? uniqueToUser2.map(f => `${formatSlug(f.slug)} - Rating: ${f.rating}`).join('\n') : `No hay películas vistas por ${username2} que no haya visto ${username1}.`;
 
-    // N/A usuario1 y no vista por usuario2 (exclusivo)
-    const user1NA = filmsUser1.filter(f1 => f1.rating === 'N/A' && !filmsUser2.some(f2 => f2.slug === f1.slug));
-    document.getElementById('filmSlugsNA').textContent = user1NA.length ? user1NA.map(f => formatSlug(f.slug)).join('\n') : `No hay películas con N/A para ${username1} que ${username2} no haya visto.`;
+    // Películas que Usuario 1 tiene N/A y Usuario 2 NO tiene (ni vistas ni con rating)
+    const naUser1NotUser2 = filmsUser1.filter(f1 => f1.rating === 'N/A' && !filmsUser2.some(f2 => f2.slug === f1.slug));
+    document.getElementById('filmSlugsNA').textContent = naUser1NotUser2.length ? naUser1NotUser2.map(f => formatSlug(f.slug)).join('\n') : `No hay películas con N/A para ${username1} que ${username2} no haya visto.`;
 
     document.getElementById('results').style.display = 'flex';
 
