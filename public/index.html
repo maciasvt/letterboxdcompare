@@ -221,48 +221,49 @@
             document.getElementById('labelWatchlistCompare').style.display = 'block'; // Mostrar label de comparación de watchlist
         }
 
-        function compararFilmsUnicos() {
-            const films1 = document.getElementById('filmSlugs1').textContent.split('\n').map(line => {
-                const parts = line.split(' - ');
-                return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
-            }).filter(film => film.rating !== "N/A");
+function compararFilmsUnicos() {
+    // Extraer arrays de objetos {slug, rating} sin filtrar N/A, para que conteo de vistos sea completo
+    const films1 = document.getElementById('filmSlugs1').textContent.split('\n').map(line => {
+        const parts = line.split(' - ');
+        return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
+    }).filter(film => film.slug !== "");
 
-            const films2 = document.getElementById('filmSlugs2').textContent.split('\n').map(line => {
-                const parts = line.split(' - ');
-                return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
-            }).filter(film => film.rating !== "N/A");
+    const films2 = document.getElementById('filmSlugs2').textContent.split('\n').map(line => {
+        const parts = line.split(' - ');
+        return { slug: parts[0].trim(), rating: parts.length > 1 ? parts[1].replace('Rating: ', '').trim() : "N/A" };
+    }).filter(film => film.slug !== "");
 
-            const uniqueToUser1 = films1.filter(film1 => !films2.some(film2 => film2.slug === film1.slug));
-            const uniqueToUser2 = films2.filter(film2 => !films1.some(film1 => film1.slug === film2.slug));
+    // Sólo contar como únicos los que NO aparecen en el otro usuario (sin importar rating)
+    const uniqueToUser1 = films1.filter(film1 => !films2.some(film2 => film2.slug === film1.slug));
+    const uniqueToUser2 = films2.filter(film2 => !films1.some(film1 => film1.slug === film2.slug));
 
-            // Función de inversión para el orden de clasificación
-            const ratingSort = (a, b) => {
-                if (a.rating === "N/A" && b.rating === "N/A") return 0; // Ambos son N/A
-                if (a.rating === "N/A") return 1; // Colocar N/A al final
-                if (b.rating === "N/A") return -1;
-                return b.rating - a.rating; // Ordenar de mayor a menor
-            };
+    // Ordenar por rating (N/A al final)
+    const ratingSort = (a, b) => {
+        if (a.rating === "N/A" && b.rating === "N/A") return 0;
+        if (a.rating === "N/A") return 1;
+        if (b.rating === "N/A") return -1;
+        return b.rating - a.rating;
+    };
 
-            // Ordenar por rating (más alto primero)
-            uniqueToUser1.sort(ratingSort);
-            uniqueToUser2.sort(ratingSort);
+    uniqueToUser1.sort(ratingSort);
+    uniqueToUser2.sort(ratingSort);
 
-            // Mostrar en los nuevos divs
-            document.getElementById('filmSlugs3').textContent = uniqueToUser1.length > 0 ? uniqueToUser1.map(film => `${film.slug} - Rating: ${film.rating}`).join('\n') : "No hay películas vistas por " + username1 + " que no haya visto " + username2 + ".";
-            document.getElementById('filmSlugs4').textContent = uniqueToUser2.length > 0 ? uniqueToUser2.map(film => `${film.slug} - Rating: ${film.rating}`).join('\n') : "No hay películas vistas por " + username2 + " que no haya visto " + username1 + ".";
-            
-            console.log(`Películas únicas para ${username1}:`, uniqueToUser1);
-            console.log(`Películas únicas para ${username2}:`, uniqueToUser2);
+    // Mostrar resultados en divs correspondientes
+    document.getElementById('filmSlugs3').textContent = uniqueToUser1.length > 0 
+        ? uniqueToUser1.map(film => `${film.slug} - Rating: ${film.rating}`).join('\n') 
+        : `No hay películas vistas por ${username1} que no haya visto ${username2}.`;
 
-            // Mostrar los nuevos divs
-            document.getElementById('filmSlugs3').style.display = 'block'; // Mostrar películas únicas de usuario 1
-            document.getElementById('filmSlugs4').style.display = 'block'; // Mostrar películas únicas de usuario 2
+    document.getElementById('filmSlugs4').textContent = uniqueToUser2.length > 0 
+        ? uniqueToUser2.map(film => `${film.slug} - Rating: ${film.rating}`).join('\n') 
+        : `No hay películas vistas por ${username2} que no haya visto ${username1}.`;
 
-            document.getElementById('labelUniqueFilms1').style.display = 'block'; // Mostrar etiqueta de películas únicas de usuario 1
-            document.getElementById('labelUniqueFilms2').style.display = 'block'; // Mostrar etiqueta de películas únicas de usuario 2
-            document.getElementById('labelUniqueFilms1').textContent = `Seen by ${username1} not by ${username2}`;
-            document.getElementById('labelUniqueFilms2').textContent = `Seen by ${username2} not by ${username1}`;
-        }
+    // Mostrar las etiquetas correspondientes con los nombres actuales
+    document.getElementById('labelUniqueFilms1').style.display = 'block';
+    document.getElementById('labelUniqueFilms2').style.display = 'block';
+    document.getElementById('labelUniqueFilms1').textContent = `Seen by ${username1} not by ${username2}`;
+    document.getElementById('labelUniqueFilms2').textContent = `Seen by ${username2} not by ${username1}`;
+}
+
 
         function formatFilmSlug(slug, rating) {
             const formattedSlug = slug.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
@@ -288,8 +289,11 @@
     <!-- Labels escondidos inicialmente -->
     <div class="film-container">
         <h2 id="labelSlugs1" class="label">Last seen by :</h2>
+    </div>
+    <div class="film-container">
         <h2 id="labelSlugs2" class="label">Last seen by :</h2>
     </div>
+    
     <div class="film-container">
         <div id="filmSlugs1"></div>
         <div id="filmSlugs2"></div>
@@ -307,6 +311,8 @@
     
     <div class="film-container">
         <h2 id="labelWatchlistSlugs1" class="label">Watchlist:</h2>
+    </div>
+    <div class="film-container">
         <h2 id="labelWatchlistSlugs2" class="label">Watchlist:</h2>
     </div>
     <div class="film-container">
@@ -320,4 +326,5 @@
     <pre id="codeOutput"></pre>
 </body>
 </html>
+
 
