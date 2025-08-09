@@ -87,19 +87,19 @@
 
 <div id="results">
   <div class="section">
-    <h2 id="labelSlugs1">Last seen by: User 1</h2>
+    <h2 id="labelSlugs1">Last seen by: </h2>
     <div id="filmSlugs1" class="data-box"></div>
   </div>
   <div class="section">
-    <h2 id="labelSlugs2">Last seen by: User 2</h2>
+    <h2 id="labelSlugs2">Last seen by: </h2>
     <div id="filmSlugs2" class="data-box"></div>
   </div>
   <div class="section">
-    <h2 id="labelWatchlistSlugs1">User 1's Watchlist</h2>
+    <h2 id="labelWatchlistSlugs1"></h2>
     <div id="watchlistSlugs1" class="data-box"></div>
   </div>
   <div class="section">
-    <h2 id="labelWatchlistSlugs2">User 2's Watchlist</h2>
+    <h2 id="labelWatchlistSlugs2"></h2>
     <div id="watchlistSlugs2" class="data-box"></div>
   </div>
   <div class="section">
@@ -111,21 +111,16 @@
     <div id="watchlistCompare" class="data-box"></div>
   </div>
   <div class="section">
-    <h2 id="labelUniqueFilms1">Seen by User 1 not by User 2</h2>
+    <h2 id="labelUniqueFilms1"></h2>
     <div id="filmSlugs3" class="data-box"></div>
   </div>
   <div class="section">
-    <h2 id="labelUniqueFilms2">Seen by User 2 not by User 1</h2>
+    <h2 id="labelUniqueFilms2"></h2>
     <div id="filmSlugs4" class="data-box"></div>
-  </div>
-  <div class="section">
-    <h2 id="labelNAUser1NotUser2">Seen by User 1 N/A and not seen by User 2</h2>
-    <div id="filmSlugsNA" class="data-box"></div>
   </div>
 </div>
 
 <script>
-  // Variables globales para datos
   let username1 = '';
   let username2 = '';
   let filmsUser1 = [];
@@ -142,7 +137,6 @@
       return;
     }
 
-    // Ocultar resultados antes de cargar
     document.getElementById('results').style.display = 'none';
 
     const url1 = `https://letterboxd.com/${encodeURIComponent(username1)}/films`;
@@ -231,12 +225,13 @@
   }
 
   function mostrarResultados(){
+    // Actualiza labels con nombres de usuario
     document.getElementById('labelSlugs1').textContent = `Last seen by: ${username1}`;
     document.getElementById('labelSlugs2').textContent = `Last seen by: ${username2}`;
     document.getElementById('labelWatchlistSlugs1').textContent = `${username1}'s Watchlist`;
     document.getElementById('labelWatchlistSlugs2').textContent = `${username2}'s Watchlist`;
 
-    // Mostrar vistos (incluyendo N/A)
+    // Mostrar películas vistas (todas incluyendo N/A)
     document.getElementById('filmSlugs1').textContent = filmsUser1.map(f => formatFilmSlug(f.slug, f.rating)).join('\n');
     document.getElementById('filmSlugs2').textContent = filmsUser2.map(f => formatFilmSlug(f.slug, f.rating)).join('\n');
 
@@ -261,17 +256,15 @@
     const wlMatches = wl1.filter(s => wl2.includes(s));
     document.getElementById('watchlistCompare').textContent = wlMatches.length ? wlMatches.map(formatSlug).join('\n') : 'No se encontraron coincidencias en las watchlists.';
 
-    // Únicos vistos por usuario 1 y 2 (incluye N/A)
+    // Únicos vistos (incluye N/A) por usuario 1 que usuario 2 no tiene
     const unique1 = filmsUser1.filter(f1 => !filmsUser2.some(f2 => f2.slug === f1.slug));
     const unique2 = filmsUser2.filter(f2 => !filmsUser1.some(f1 => f1.slug === f2.slug));
+    document.getElementById('labelUniqueFilms1').textContent = `Seen by ${username1} not by ${username2}`;
+    document.getElementById('labelUniqueFilms2').textContent = `Seen by ${username2} not by ${username1}`;
     document.getElementById('filmSlugs3').textContent = unique1.length ? unique1.map(f => `${formatSlug(f.slug)} - Rating: ${f.rating}`).join('\n') : `No hay películas vistas por ${username1} que no haya visto ${username2}.`;
     document.getElementById('filmSlugs4').textContent = unique2.length ? unique2.map(f => `${formatSlug(f.slug)} - Rating: ${f.rating}`).join('\n') : `No hay películas vistas por ${username2} que no haya visto ${username1}.`;
 
-    // Películas con N/A para usuario1 que usuario2 no tiene (ni vistas ni rating)
-    const naUnique = filmsUser1.filter(f1 => f1.rating === "N/A" && !filmsUser2.some(f2 => f2.slug === f1.slug));
-    document.getElementById('filmSlugsNA').textContent = naUnique.length ? naUnique.map(f => formatSlug(f.slug)).join('\n') : `No hay películas con N/A para ${username1} que ${username2} no haya visto.`;
-
-    // Finalmente mostrar todo
+    // Mostrar resultados
     document.getElementById('results').style.display = 'block';
   }
 
