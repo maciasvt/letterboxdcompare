@@ -1,274 +1,354 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Letterboxd Compare</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            margin: 0;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #142428;
-            font-family: "Roboto", sans-serif;
-            color: white;
-        }
-        h1 {
-            font-size: 28px;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 400px;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        input {
-            font-size: 16px;
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-        }
-        button {
-            font-size: 18px;
-            background-color: #00ac1c;
-            color: white;
-            padding: 10px;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-        button:hover {
-            background-color: #007a0b;
-            transform: translateY(-3px);
-        }
-        .label, #filmSlugs1, #filmSlugs2, #filmCompare, #watchlistSlugs1, #watchlistSlugs2, 
-        #watchlistCompare, #uniqueFilms1, #uniqueFilms2, #filmSlugs3, #filmSlugs4 {
-            display: none;
-            margin-top: 15px;
-            width: 100%;
-            max-width: 400px;
-            word-wrap: break-word;
-        }
-        .data-box {
-            background: white;
-            color: black;
-            padding: 10px;
-            font-size: 14px;
-            border-radius: 5px;
-            max-height: 150px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-    </style>
-    <script>
-        let username1 = '';
-        let username2 = '';
-
-        function construirUrlYExtraer() {
-            username1 = document.getElementById('username1').value.trim();
-            username2 = document.getElementById('username2').value.trim();
-
-            document.getElementById('labelSlugs1').textContent = `Last seen by: ${username1}`;
-            document.getElementById('labelSlugs2').textContent = `Last seen by: ${username2}`;
-            document.getElementById('labelWatchlistSlugs1').textContent = `${username1}'s Watchlist`;
-            document.getElementById('labelWatchlistSlugs2').textContent = `${username2}'s Watchlist`;
-
-            const url1 = `https://letterboxd.com/${username1}/films`;
-            const url2 = `https://letterboxd.com/${username2}/films`;
-            const watchlistUrl1 = `https://letterboxd.com/${username1}/watchlist/`;
-            const watchlistUrl2 = `https://letterboxd.com/${username2}/watchlist/`;
-
-            Promise.all([
-                extraerHtml(url1, 'filmSlugs1').then(() => mostrarElemento('labelSlugs1')),
-                extraerHtml(url2, 'filmSlugs2').then(() => mostrarElemento('labelSlugs2')),
-                extraerHtmlWatchlist(watchlistUrl1, 'watchlistSlugs1').then(() => mostrarElemento('labelWatchlistSlugs1')),
-                extraerHtmlWatchlist(watchlistUrl2, 'watchlistSlugs2').then(() => mostrarElemento('labelWatchlistSlugs2'))
-            ]).then(() => {
-                compararFilms();
-                compararWatchlists();
-                compararFilmsUnicos();
-            });
-        }
-
-        function mostrarElemento(id) {
-            document.getElementById(id).style.display = 'block';
-        }
-
-        async function extraerHtml(url, containerId) {
-            const response = await fetch(`/extraer?url=${encodeURIComponent(url)}`);
-            const html = await response.text();
-            const totalPages = encontrarTotalPaginas(html);
-            let filmData = extraerSlugsConCalificacion(html);
-
-            for (let i = 2; i <= totalPages; i++) {
-                const pageResponse = await fetch(`/extraer?url=${encodeURIComponent(`${url}/page/${i}/`)}`);
-                const pageHtml = await pageResponse.text();
-                filmData = filmData.concat(extraerSlugsConCalificacion(pageHtml));
-            }
-
-            document.getElementById(containerId).innerHTML = `<div class="data-box">${filmData.map(f => formatFilmSlug(f.slug, f.rating)).join('\n')}</div>`;
-            mostrarElemento(containerId);
-        }
-
-        async function extraerHtmlWatchlist(url, containerId) {
-            const response = await fetch(`/extraer?url=${encodeURIComponent(url)}`);
-            const html = await response.text();
-            const totalPages = encontrarTotalPaginas(html);
-            let watchlistData = extraerSlugsWatchlist(html);
-
-            for (let i = 2; i <= totalPages; i++) {
-                const pageResponse = await fetch(`/extraer?url=${encodeURIComponent(`${url}/page/${i}/`)}`);
-                const pageHtml = await pageResponse.text();
-                watchlistData = watchlistData.concat(extraerSlugsWatchlist(pageHtml));
-            }
-
-            document.getElementById(containerId).innerHTML = `<div class="data-box">${watchlistData.map(f => formatSlug(f.slug)).join('\n')}</div>`;
-            mostrarElemento(containerId);
-        }
-
-        function encontrarTotalPaginas(html) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            const pages = tempDiv.querySelectorAll('.paginate-page');
-            return pages.length > 0 ? parseInt(pages[pages.length - 1].textContent, 10) : 1;
-        }
-
-        function extraerSlugsConCalificacion(html) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            const elementos = tempDiv.querySelectorAll('[data-film-slug]');
-            let filmData = [];
-            elementos.forEach(e => {
-                const slug = e.getAttribute('data-film-slug');
-                const ratingElement = e.closest('.poster-container').querySelector('.poster-viewingdata .rating');
-                const rating = ratingElement ? ratingElement.className.match(/rated-(\d+)/) : null;
-                const filmRating = rating ? rating[1] : "N/A";
-                filmData.push({ slug, rating: filmRating });
-            });
-            return filmData;
-        }
-
-        function extraerSlugsWatchlist(html) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            const elementos = tempDiv.querySelectorAll('[data-film-slug]');
-            return Array.from(elementos).map(e => ({ slug: e.getAttribute('data-film-slug') }));
-        }
-
-        function compararFilms() {
-            const films1 = getFilteredFilms('filmSlugs1');
-            const films2 = getFilteredFilms('filmSlugs2');
-
-            const coincidencias = films1.filter(f1 => films2.some(f2 => f2.slug === f1.slug))
-                .map(f1 => {
-                    const f2 = films2.find(f => f.slug === f1.slug);
-                    return { slug: f1.slug, rating1: parseInt(f1.rating), rating2: parseInt(f2.rating) };
-                });
-
-            coincidencias.sort((a, b) => (b.rating1 - b.rating2) - (a.rating1 - a.rating2));
-
-            document.getElementById('filmCompare').innerHTML = `<div class="data-box">${
-                coincidencias.length ? coincidencias.map(f => `${f.slug} - Ratings: ${f.rating1} | ${f.rating2}`).join('\n') : "No matches."
-            }</div>`;
-            mostrarElemento('filmCompare');
-            mostrarElemento('labelFilmCompare');
-        }
-
-        function compararWatchlists() {
-            const wl1 = getSlugList('watchlistSlugs1');
-            const wl2 = getSlugList('watchlistSlugs2');
-
-            const matches = wl1.filter(s => wl2.includes(s));
-            document.getElementById('watchlistCompare').innerHTML = `<div class="data-box">${
-                matches.length ? matches.map(formatSlug).join('\n') : "No matches."
-            }</div>`;
-            mostrarElemento('watchlistCompare');
-            mostrarElemento('labelWatchlistCompare');
-        }
-
-        function compararFilmsUnicos() {
-            const films1 = getFilteredFilms('filmSlugs1');
-            const films2 = getFilteredFilms('filmSlugs2');
-
-            const unique1 = films1.filter(f1 => !films2.some(f2 => f2.slug === f1.slug));
-            const unique2 = films2.filter(f2 => !films1.some(f1 => f1.slug === f2.slug));
-
-            unique1.sort((a, b) => b.rating - a.rating);
-            unique2.sort((a, b) => b.rating - a.rating);
-
-            document.getElementById('filmSlugs3').innerHTML = `<div class="data-box">${
-                unique1.length ? unique1.map(f => `${f.slug} - Rating: ${f.rating}`).join('\n') : `No films seen by ${username1} not by ${username2}.`
-            }</div>`;
-            document.getElementById('filmSlugs4').innerHTML = `<div class="data-box">${
-                unique2.length ? unique2.map(f => `${f.slug} - Rating: ${f.rating}`).join('\n') : `No films seen by ${username2} not by ${username1}.`
-            }</div>`;
-
-            mostrarElemento('filmSlugs3');
-            mostrarElemento('filmSlugs4');
-            mostrarElemento('labelUniqueFilms1');
-            mostrarElemento('labelUniqueFilms2');
-            document.getElementById('labelUniqueFilms1').textContent = `Seen by ${username1} not by ${username2}`;
-            document.getElementById('labelUniqueFilms2').textContent = `Seen by ${username2} not by ${username1}`;
-        }
-
-        function getFilteredFilms(containerId) {
-            return document.getElementById(containerId).textContent.split('\n')
-                .map(line => {
-                    const parts = line.split(' - ');
-                    return { slug: parts[0].trim(), rating: parts[1] ? parts[1].replace('Rating: ', '').trim() : "N/A" };
-                })
-                .filter(f => f.rating !== "N/A");
-        }
-
-        function getSlugList(containerId) {
-            return document.getElementById(containerId).textContent.split('\n').map(s => s.trim()).filter(s => s);
-        }
-
-        function formatFilmSlug(slug, rating) {
-            return `${slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} - Rating: ${rating}`;
-        }
-
-        function formatSlug(slug) {
-            return slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        }
-    </script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Letterboxd Compare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #142428;
+    --accent: #00ac1c;
+    --accent-dark: #007a0b;
+    --card-bg: #fff;
+    --card-text: #111;
+    --max-width: 420px;
+  }
+  html,body{
+    height:100%;
+    margin:0;
+    padding:0;
+    font-family:"Roboto",sans-serif;
+    background:var(--bg);
+    color:#fff;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+  .wrap{
+    box-sizing:border-box;
+    width:100%;
+    max-width:var(--max-width);
+    margin:0 auto;
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  h1{
+    margin:0;
+    font-size:20px;
+    text-align:center;
+    font-weight:700;
+  }
+  .inputs {
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    width:100%;
+  }
+  input[type="text"]{
+    width:100%;
+    padding:12px;
+    font-size:15px;
+    border-radius:8px;
+    border:none;
+    outline:none;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+  }
+  button#compareBtn{
+    width:100%;
+    padding:12px;
+    font-size:16px;
+    border-radius:8px;
+    border:none;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+    transition:transform .12s ease, background-color .18s ease;
+  }
+  button#compareBtn:active{ transform:translateY(1px); }
+  button#compareBtn:hover{ background:var(--accent-dark); }
+  .results {
+    display:none;
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .user-section{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    width:100%;
+  }
+  .section-title{
+    color:#cfe6d0;
+    font-weight:700;
+    font-size:13px;
+    margin:0;
+  }
+  .data-box{
+    background:var(--card-bg);
+    color:var(--card-text);
+    padding:10px;
+    border-radius:8px;
+    font-size:13px;
+    line-height:1.4;
+    max-height:180px;
+    overflow:auto;
+    white-space:pre-wrap;
+    word-break:break-word;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  .compare-block{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  @media (max-width:360px){
+    .wrap{ padding:12px; }
+    input[type="text"]{ padding:10px; font-size:14px; }
+    button#compareBtn{ padding:10px; font-size:15px; }
+    .data-box{ font-size:13px; }
+  }
+  .small-muted{
+    color:#99b3a6;
+    font-size:12px;
+  }
+</style>
 </head>
 <body>
-    <h1>Letterboxd Compare</h1>
-    <div class="container">
-        <input type="text" id="username1" placeholder="User 1">
-        <input type="text" id="username2" placeholder="User 2">
-        <button onclick="construirUrlYExtraer()">Compare profiles!</button>
+<div class="wrap">
+  <h1>Letterboxd Compare</h1>
+
+  <div class="inputs" id="controls">
+    <input id="username1" type="text" placeholder="User 1 (ej. juan123)" autocomplete="username" />
+    <input id="username2" type="text" placeholder="User 2 (ej. maria456)" autocomplete="username" />
+    <button id="compareBtn" onclick="construirUrlYExtraer()">Compare profiles!</button>
+  </div>
+
+  <div id="results" class="results">
+
+    <div class="user-section" id="user1Section">
+      <span id="labelSlugs1" class="section-title">Last seen by: </span>
+      <div id="filmSlugs1" class="data-box"></div>
+      <span id="labelWatchlistSlugs1" class="section-title">Watchlist</span>
+      <div id="watchlistSlugs1" class="data-box"></div>
     </div>
 
-    <h2 id="labelSlugs1" class="label"></h2>
-    <div id="filmSlugs1"></div>
-    <h2 id="labelSlugs2" class="label"></h2>
-    <div id="filmSlugs2"></div>
+    <div class="user-section" id="user2Section">
+      <span id="labelSlugs2" class="section-title">Last seen by: </span>
+      <div id="filmSlugs2" class="data-box"></div>
+      <span id="labelWatchlistSlugs2" class="section-title">Watchlist</span>
+      <div id="watchlistSlugs2" class="data-box"></div>
+    </div>
 
-    <h2 id="labelFilmCompare" class="label">Seen by both + ratings:</h2>
-    <div id="filmCompare"></div>
+    <div class="compare-block">
+      <span id="labelFilmCompare" class="section-title">Seen by both + ratings</span>
+      <div id="filmCompare" class="data-box"></div>
 
-    <h2 id="labelUniqueFilms1" class="label"></h2>
-    <div id="filmSlugs3"></div>
-    <h2 id="labelUniqueFilms2" class="label"></h2>
-    <div id="filmSlugs4"></div>
+      <span id="labelWatchlistCompare" class="section-title">In both watchlists</span>
+      <div id="watchlistCompare" class="data-box"></div>
+    </div>
 
-    <h2 id="labelWatchlistSlugs1" class="label"></h2>
-    <div id="watchlistSlugs1"></div>
-    <h2 id="labelWatchlistSlugs2" class="label"></h2>
-    <div id="watchlistSlugs2"></div>
+    <div class="compare-block">
+      <span id="labelUniqueFilms1" class="section-title">Seen by User 1 not by User 2</span>
+      <div id="filmSlugs3" class="data-box"></div>
 
-    <h2 id="labelWatchlistCompare" class="label">In both watchlists:</h2>
-    <div id="watchlistCompare"></div>
+      <span id="labelUniqueFilms2" class="section-title">Seen by User 2 not by User 1</span>
+      <div id="filmSlugs4" class="data-box"></div>
+    </div>
+
+    <div class="compare-block">
+      <span id="labelNAUser1NotUser2" class="section-title">Seen by User 1 N/A and not seen by User 2</span>
+      <div id="filmSlugsNA" class="data-box"></div>
+    </div>
+
+    <div class="small-muted">Resultados cargados desde tu endpoint <code>/extraer?url=...</code></div>
+  </div>
+</div>
+
+<script>
+  let filmsUser1 = [];
+  let filmsUser2 = [];
+  let watchlistUser1 = [];
+  let watchlistUser2 = [];
+  let username1 = '';
+  let username2 = '';
+
+  async function construirUrlYExtraer(){
+    username1 = document.getElementById('username1').value.trim();
+    username2 = document.getElementById('username2').value.trim();
+
+    if(!username1 || !username2){
+      alert('Ingresa ambos usuarios antes de comparar.');
+      return;
+    }
+
+    document.getElementById('results').style.display = 'none';
+    showLoadingState(true);
+
+    const url1 = `https://letterboxd.com/${encodeURIComponent(username1)}/films`;
+    const url2 = `https://letterboxd.com/${encodeURIComponent(username2)}/films`;
+    const watchlistUrl1 = `https://letterboxd.com/${encodeURIComponent(username1)}/watchlist/`;
+    const watchlistUrl2 = `https://letterboxd.com/${encodeURIComponent(username2)}/watchlist/`;
+
+    try {
+      const [f1, f2, wl1, wl2] = await Promise.all([
+        extraerHtml(url1),
+        extraerHtml(url2),
+        extraerHtmlWatchlist(watchlistUrl1),
+        extraerHtmlWatchlist(watchlistUrl2)
+      ]);
+
+      filmsUser1 = f1; filmsUser2 = f2;
+      watchlistUser1 = wl1; watchlistUser2 = wl2;
+
+      renderResults();
+    } catch (err) {
+      console.error(err);
+      alert('Ocurrió un error al extraer los datos. Revisa la consola y el endpoint /extraer.');
+    } finally {
+      showLoadingState(false);
+    }
+  }
+
+  function showLoadingState(isLoading){
+    const btn = document.getElementById('compareBtn');
+    btn.disabled = isLoading;
+    btn.textContent = isLoading ? 'Loading...' : 'Compare profiles!';
+  }
+
+  async function extraerHtml(url){
+    const resp = await fetch(`/extraer?url=${encodeURIComponent(url)}`);
+    const html = await resp.text();
+    const totalPages = encontrarTotalPaginas(html);
+    let filmData = extraerSlugsConCalificacion(html);
+
+    if(totalPages > 1){
+      for(let i=2;i<=totalPages;i++){
+        const pageUrl = `${url}/page/${i}/`;
+        const pageResp = await fetch(`/extraer?url=${encodeURIComponent(pageUrl)}`);
+        const pageHtml = await pageResp.text();
+        filmData = filmData.concat(extraerSlugsConCalificacion(pageHtml));
+      }
+    }
+    return filmData;
+  }
+
+  async function extraerHtmlWatchlist(url){
+    const resp = await fetch(`/extraer?url=${encodeURIComponent(url)}`);
+    const html = await resp.text();
+    const totalPages = encontrarTotalPaginas(html);
+    let wl = extraerSlugsWatchlist(html);
+
+    if(totalPages > 1){
+      for(let i=2;i<=totalPages;i++){
+        const pageUrl = `${url}/page/${i}/`;
+        const pageResp = await fetch(`/extraer?url=${encodeURIComponent(pageUrl)}`);
+        const pageHtml = await pageResp.text();
+        wl = wl.concat(extraerSlugsWatchlist(pageHtml));
+      }
+    }
+    return wl;
+  }
+
+  function encontrarTotalPaginas(html){
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    const pages = temp.querySelectorAll('.paginate-page');
+    return pages.length > 0 ? parseInt(pages[pages.length-1].textContent,10) : 1;
+  }
+
+  function extraerSlugsConCalificacion(html){
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    const elementos = temp.querySelectorAll('[data-film-slug]');
+    const arr = [];
+    elementos.forEach(el => {
+      const slug = el.getAttribute('data-film-slug');
+      let ratingNode = null;
+      try {
+        ratingNode = el.closest('.poster-container')?.querySelector('.poster-viewingdata .rating');
+      } catch(e) { ratingNode = null; }
+      const ratingMatch = ratingNode ? (ratingNode.className.match(/rated-(\d+)/) || null) : null;
+      const rating = ratingMatch ? ratingMatch[1] : "N/A";
+      arr.push({ slug, rating });
+    });
+    return arr;
+  }
+
+  function extraerSlugsWatchlist(html){
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    const elementos = temp.querySelectorAll('[data-film-slug]');
+    return Array.from(elementos).map(e => ({ slug: e.getAttribute('data-film-slug') }));
+  }
+
+  function renderResults(){
+    document.getElementById('labelSlugs1').textContent = `Last seen by: ${username1}`;
+    document.getElementById('labelSlugs2').textContent = `Last seen by: ${username2}`;
+    document.getElementById('labelWatchlistSlugs1').textContent = `${username1}'s Watchlist`;
+    document.getElementById('labelWatchlistSlugs2').textContent = `${username2}'s Watchlist`;
+
+    // Seen (solo rating válido)
+    const seen1 = filmsUser1.filter(f => f.rating !== 'N/A');
+    const seen2 = filmsUser2.filter(f => f.rating !== 'N/A');
+
+    document.getElementById('filmSlugs1').textContent = seen1.length ? seen1.map(f => formatFilmSlug(f.slug, f.rating)).join('\n') : 'No visto identificado.';
+    document.getElementById('filmSlugs2').textContent = seen2.length ? seen2.map(f => formatFilmSlug(f.slug, f.rating)).join('\n') : 'No visto identificado.';
+
+    // Watchlists
+    document.getElementById('watchlistSlugs1').textContent = watchlistUser1.length ? watchlistUser1.map(s => formatSlug(s.slug)).join('\n') : 'Watchlist vacía.';
+    document.getElementById('watchlistSlugs2').textContent = watchlistUser2.length ? watchlistUser2.map(s => formatSlug(s.slug)).join('\n') : 'Watchlist vacía.';
+
+    // Seen by both: solo con rating en ambos
+    const seenByBoth = seen1.filter(s1 => seen2.some(s2 => s2.slug === s1.slug))
+      .map(s1 => {
+        const s2 = seen2.find(x => x.slug === s1.slug);
+        return { slug: s1.slug, rating1: parseInt(s1.rating,10), rating2: parseInt(s2.rating,10) };
+      });
+
+    seenByBoth.sort((a,b) => Math.abs(b.rating1 - b.rating2) - Math.abs(a.rating1 - a.rating2));
+
+    document.getElementById('filmCompare').textContent = seenByBoth.length ? seenByBoth.map(f => `${formatSlug(f.slug)} - Ratings: ${f.rating1} | ${f.rating2}`).join('\n') : 'No se encontraron coincidencias.';
+
+    // Watchlist matches
+    const wl1 = watchlistUser1.map(x => x.slug);
+    const wl2 = watchlistUser2.map(x => x.slug);
+    const wlMatches = wl1.filter(s => wl2.includes(s));
+    document.getElementById('watchlistCompare').textContent = wlMatches.length ? wlMatches.map(formatSlug).join('\n') : 'No se encontraron coincidencias en las watchlists.';
+
+    // Únicos (vistos con rating válido)
+    const uniqueToUser1 = seen1.filter(s1 => !seen2.some(s2 => s2.slug === s1.slug));
+    const uniqueToUser2 = seen2.filter(s2 => !seen1.some(s1 => s1.slug === s2.slug));
+
+    uniqueToUser1.sort((a,b) => parseInt(b.rating||0,10) - parseInt(a.rating||0,10));
+    uniqueToUser2.sort((a,b) => parseInt(b.rating||0,10) - parseInt(a.rating||0,10));
+
+    document.getElementById('filmSlugs3').textContent = uniqueToUser1.length ? uniqueToUser1.map(f => `${formatSlug(f.slug)} - Rating: ${f.rating}`).join('\n') : `No hay películas vistas por ${username1} que no haya visto ${username2}.`;
+    document.getElementById('filmSlugs4').textContent = uniqueToUser2.length ? uniqueToUser2.map(f => `${formatSlug(f.slug)} - Rating: ${f.rating}`).join('\n') : `No hay películas vistas por ${username2} que no haya visto ${username1}.`;
+
+    // N/A usuario1 y no vista por usuario2 (exclusivo)
+    const user1NA = filmsUser1.filter(f1 => f1.rating === 'N/A' && !filmsUser2.some(f2 => f2.slug === f1.slug));
+    document.getElementById('filmSlugsNA').textContent = user1NA.length ? user1NA.map(f => formatSlug(f.slug)).join('\n') : `No hay películas con N/A para ${username1} que ${username2} no haya visto.`;
+
+    document.getElementById('results').style.display = 'flex';
+
+    setTimeout(() => {
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
+  function formatFilmSlug(slug, rating){
+    return `${formatSlug(slug)} - Rating: ${rating}`;
+  }
+  function formatSlug(slug){
+    if(!slug) return '';
+    return slug.replace(/-/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+</script>
 </body>
 </html>
